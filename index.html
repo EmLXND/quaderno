@@ -19,7 +19,7 @@
 :root{
   --paper:#FAFBFD; --surface:#FFFFFF; --grid:rgba(60,110,200,.11);
   --ink:#1C3A8A; --text:#1E2433; --muted:#626B80; --line:#DCE2EE;
-  --margin:#D2382A; --ok:#1F7A4D; --okbg:#E4F3EA;
+  --margin:#D2382A; --ok:#1F7A4D; --okbg:#E4F3EA; --kobg:#FBE7E4;
   --masc:#1C5FC9; --fem:#C2364F;
   --display:"Fraunces", Georgia, "Times New Roman", serif;
   --ui:"Figtree", -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -27,12 +27,12 @@
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
   --paper:#1C2623; --surface:#24302C; --grid:rgba(235,240,230,.05);
   --ink:#F1EFDF; --text:#E6E8E1; --muted:#9DA8A2; --line:#35433E;
-  --margin:#F2897C; --ok:#8FD6A9; --okbg:#2B3D34;
+  --margin:#F2897C; --ok:#8FD6A9; --okbg:#2B3D34; --kobg:#45302C;
   --masc:#9CC3F2; --fem:#F2A0B0; color-scheme:dark }}
 :root[data-theme="dark"]{
   --paper:#1C2623; --surface:#24302C; --grid:rgba(235,240,230,.05);
   --ink:#F1EFDF; --text:#E6E8E1; --muted:#9DA8A2; --line:#35433E;
-  --margin:#F2897C; --ok:#8FD6A9; --okbg:#2B3D34;
+  --margin:#F2897C; --ok:#8FD6A9; --okbg:#2B3D34; --kobg:#45302C;
   --masc:#9CC3F2; --fem:#F2A0B0; color-scheme:dark }
 
 html,body{height:100%}
@@ -99,12 +99,55 @@ summary .bar{grid-column:1/-1;width:100%;margin:0}
 /* tab bar */
 nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
-nav .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+nav .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
 nav button{font:inherit;font-size:.78rem;background:none;border:0;color:var(--muted);padding:9px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button svg{width:22px;height:22px}
 nav button[aria-current="page"]{color:var(--ink);font-weight:600}
 .empty{color:var(--muted);font-size:.95rem;padding:8px 0}
-@media (prefers-reduced-motion:no-preference){.card{transition:transform .15s ease}.card:active{transform:scale(.99)}}
+
+/* sfida: endless test on known words, ends at the first mistake */
+.lead{margin:0;color:var(--muted);font-size:.95rem;line-height:1.45}
+.lead b{color:var(--text)}
+.tog{font:inherit;font-size:.9rem;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted);padding:9px 12px;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
+.tog svg{width:18px;height:18px}
+.tog[aria-pressed="true"]{color:var(--ink);border-color:var(--ink);font-weight:600}
+.btn.big{padding:16px;font-size:1.1rem}
+.sec{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:8px 0 -6px;font-weight:600}
+.hud{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.streak{font-family:var(--display);font-weight:600;font-size:2.4rem;line-height:1;color:var(--ink);font-variant-numeric:tabular-nums}
+.streak small{font-family:var(--ui);font-weight:400;font-size:.82rem;color:var(--muted);margin-left:6px}
+.hud .r{display:flex;align-items:center;gap:10px}
+.clock{font-variant-numeric:tabular-nums;color:var(--muted)}
+.ico{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);display:grid;place-items:center;cursor:pointer;padding:0}
+.ico svg{width:18px;height:18px}
+.ico[aria-pressed="true"]{color:var(--ink)}
+.card.test{cursor:default;min-height:200px;user-select:text}
+.card.ko{background-color:var(--kobg);border-color:var(--margin)}
+.given{margin-top:8px;font-size:.95rem;color:var(--margin);text-decoration:line-through;overflow-wrap:anywhere}
+.ansrow{display:flex;gap:8px}
+.ans{flex:1;min-width:0;font:inherit;font-size:18px;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.mic{flex:none;width:54px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
+.mic svg{width:22px;height:22px}
+.mic[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.mic.live{box-shadow:0 0 0 3px var(--margin)}
+.heard{font-size:.85rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;align-self:center}
+.result{text-align:center}
+.result h2{font-family:var(--display);color:var(--ink);margin:0 0 6px;font-size:1.6rem}
+.result p{margin:0;color:var(--muted);font-variant-numeric:tabular-nums}
+.result p b{color:var(--text)}
+.rank{list-style:none;margin:0;padding:0}
+.rank li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:2px 10px;padding:9px 8px;border-top:1px dotted var(--line);align-items:baseline;border-radius:8px}
+.rank .pos{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.9rem}
+.rank .pts{font-family:var(--display);font-size:1.25rem;color:var(--ink);font-variant-numeric:tabular-nums}
+.rank .pts small{font-family:var(--ui);font-size:.8rem;color:var(--muted);margin-left:5px}
+.rank .dir{font-size:.75rem;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.rank .det{grid-column:2/-1;font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.rank li.new{background:var(--okbg)}
+@keyframes okf{from{background-color:var(--okbg);border-color:var(--ok);box-shadow:inset 0 0 0 2px var(--ok)}}
+@keyframes kof{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@keyframes pop{from{transform:scale(1.2)}}
+.card.ok{animation:okf .35s ease-out}
+@media (prefers-reduced-motion:no-preference){.card{transition:transform .15s ease}.card:active{transform:scale(.99)}.card.ko{animation:kof .22s ease-in-out}.streak .pop{display:inline-block;animation:pop .2s ease-out}}
 </style>
 
 </head>
@@ -119,8 +162,8 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
       <div class="row">
         <select id="selCat" aria-label="Categoria"></select>
         <div class="seg" role="group" aria-label="Direzione">
-          <button id="dirIt" aria-pressed="true">IT → DE</button>
-          <button id="dirDe" aria-pressed="false">DE → IT</button>
+          <button id="dirIt" data-dir="it" aria-pressed="true">IT → DE</button>
+          <button id="dirDe" data-dir="de" aria-pressed="false">DE → IT</button>
         </div>
       </div>
       <label class="check"><input type="checkbox" id="incKnown"> Ripassa anche le parole già sapute</label>
@@ -138,6 +181,49 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
       <input type="search" id="q" placeholder="Cerca in italiano o tedesco…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Cerca">
       <ul class="wl" id="res"></ul>
     </section>
+
+    <section class="view" id="v-sfida" hidden>
+      <div class="view" id="sfIntro">
+        <p class="lead" id="sfLead"></p>
+        <div class="row">
+          <div class="seg" role="group" aria-label="Direzione">
+            <button data-dir="it" aria-pressed="true">IT → DE</button>
+            <button data-dir="de" aria-pressed="false">DE → IT</button>
+          </div>
+        </div>
+        <div class="row">
+          <button class="tog" id="sfSnd" aria-pressed="true"></button>
+          <button class="tog" id="sfVoice" aria-pressed="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>Rispondi a voce</button>
+        </div>
+        <button class="btn yes big" id="sfStart">Inizia</button>
+        <h3 class="sec">Classifica</h3>
+        <ol class="rank" id="sfRank"></ol>
+        <button class="link" id="sfClear" style="align-self:flex-start">Azzera classifica</button>
+        <div id="sfClearConfirm" hidden class="row"><span class="empty">Cancellare la classifica?</span><button class="btn" id="sfClearYes">Sì, azzera</button><button class="btn" id="sfClearNo">No</button></div>
+      </div>
+
+      <div class="view" id="sfRun" hidden>
+        <div class="hud">
+          <div class="streak"><span id="sfN" aria-live="polite">0</span><small>giuste</small></div>
+          <div class="r"><span class="clock" id="sfClock">0:00</span><button class="ico" id="sfSnd2" aria-label="Suoni on/off"></button></div>
+        </div>
+        <div class="card test" id="sfCard"><div class="cat" id="sfCat"></div><div class="word" id="sfWord"></div><div id="sfFix" hidden></div></div>
+        <div class="view" id="sfPlay">
+          <div class="ansrow">
+            <input class="ans" id="sfIn" type="text" placeholder="Traduzione…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" aria-label="Risposta">
+            <button class="mic" id="sfMic" aria-pressed="false" aria-label="Rispondi a voce" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+          </div>
+          <div class="meta"><span class="heard" id="sfHeard"></span><span style="flex:none"><button class="link" id="sfSkip">Non lo so</button><button class="link" id="sfStop">Termina</button></span></div>
+        </div>
+        <div class="view" id="sfEnd" hidden>
+          <div class="result"><h2 id="sfTitle"></h2><p id="sfStats"></p></div>
+          <div class="actions" id="sfEndBtns"><button class="btn" id="sfOverride">Era giusta, continua</button><button class="btn yes" id="sfAgain">Ancora</button></div>
+          <h3 class="sec">Classifica</h3>
+          <ol class="rank" id="sfRank2"></ol>
+          <button class="link" id="sfBack" style="align-self:flex-start">← Indietro</button>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -145,6 +231,7 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
   <button data-v="impara" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5v14"/></svg>Impara</button>
   <button data-v="categorie"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor"/></svg>Categorie</button>
   <button data-v="cerca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>Cerca</button>
+  <button data-v="sfida"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/></svg>Sfida</button>
 </div></nav>
 
 <script>
@@ -153,7 +240,7 @@ const W = []; // {id,it,de,c,s}
 RAW.forEach(([c,subs],ci)=>subs.forEach(([s,ws])=>ws.forEach(([it,de])=>W.push({id:it+'|'+de,it,de,c:ci,s}))));
 const CATS = RAW.map(r=>r[0]);
 const KEY='quaderno-v1';
-let st={known:{},cat:'all',dir:'it',inc:false};
+let st={known:{},cat:'all',dir:'it',inc:false,sound:true,mic:false};
 try{const v=JSON.parse(localStorage.getItem(KEY)||'null'); if(v) st=Object.assign(st,v);}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
 const $=id=>document.getElementById(id);
@@ -205,12 +292,13 @@ function render(){
   $('yes').onclick=()=>{ st.known[cur.id]=1; save(); updateScore(); renderCats(); next(); };
   $('no').onclick=()=>{ queue.splice(Math.min(queue.length,4),0,cur); next(); };
 }
+// direction is shared by Impara and Sfida
+function setDir(d){st.dir=d;document.querySelectorAll('[data-dir]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.dir===d));save();flipped=false;render();}
 function initImpara(){
   const sel=$('selCat');
   sel.innerHTML='<option value="all">Tutte le categorie ('+W.length+')</option>'+CATS.map((c,i)=>'<option value="'+i+'">'+esc(c)+' ('+W.filter(w=>w.c===i).length+')</option>').join('');
   sel.value=st.cat; sel.onchange=()=>{st.cat=sel.value;save();build();};
-  const setDir=d=>{st.dir=d;$('dirIt').setAttribute('aria-pressed',d==='it');$('dirDe').setAttribute('aria-pressed',d==='de');save();flipped=false;render();};
-  $('dirIt').onclick=()=>setDir('it'); $('dirDe').onclick=()=>setDir('de'); setDir(st.dir);
+  document.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>setDir(b.dataset.dir)); setDir(st.dir);
   $('incKnown').checked=st.inc; $('incKnown').onchange=e=>{st.inc=e.target.checked;save();build();};
   $('reshuffle').onclick=build;
 }
@@ -240,16 +328,268 @@ $('q').addEventListener('input',()=>{
   r.innerHTML=hits.length?hits.map(w=>'<li><span class="k">'+(st.known[w.id]?'✓':'')+'</span><span class="it">'+fmtIt(w.it)+'</span><span class="de">'+esc(w.de)+'</span></li>').join(''):'<li class="empty" style="display:block;border:0">Nessun risultato.</li>';
 });
 
+/* ---- Sfida ---- */
+// Answer matching: every translation variant becomes a normalized key. Articles, accents,
+// punctuation and parenthetical notes are ignored; "a, b; c" and "x/y" are separate answers.
+const ART=/^(?:il|lo|la|i|gli|le|un|uno|una|der|die|das|den|dem|des|ein|eine|einen|einem|sich|si)\s+(?=\S)/;
+const ART2=/^(?:l|un)['’](?=\S)/;
+function key(s){
+  s=s.toLowerCase().replace(/\([^)]*\)/g,' ').replace(/…|\.\.\./g,' * ').replace(/\s+/g,' ').trim();
+  s=s.replace(ART2,'').replace(ART,'');
+  s=s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ß/g,'ss').replace(/ae/g,'a').replace(/oe/g,'o').replace(/ue/g,'u');
+  return s.replace(/['’`´\-–.,;:!?¿¡"«»„“”]/g,'').replace(/\s+/g,' ').trim();
+}
+function answers(t){
+  const out=new Set(), add=x=>{const k=key(x); if(k&&k!=='*') out.add(k);};
+  for(const part of t.replace(/\([^)]*\)/g,' ').split(';')){
+    const s=part.replace(/\s+/g,' ').trim(), phrase=/…|[.?!]$/.test(s), bases=[s];
+    // "Gira a destra / a sinistra." → "Gira a destra", "Gira a sinistra."
+    const sp=s.split(' / ');
+    if(sp.length===2){ const lw=sp[0].split(' '), rw=sp[1].split(' '); if(rw.length<lw.length) bases.push(sp[0],lw.slice(0,lw.length-rw.length).concat(rw).join(' ')); }
+    for(const base of bases){
+      // "guten Morgen/Tag" → "guten Morgen", "guten Tag"
+      let vs=[''];
+      for(const tok of base.replace(/\s*\/\s*/g,'/').split(' ').filter(Boolean)){
+        const opts=tok.includes('/')?tok.split('/').filter(Boolean):[tok], nx=[];
+        for(const v of vs) for(const o of opts) nx.push(v?v+' '+o:o);
+        vs=nx.slice(0,16);
+      }
+      vs.forEach(v=>{ add(v); if(!phrase) v.split(',').forEach(add); });
+    }
+  }
+  return [...out];
+}
+// edit distance that counts a swap of two neighbouring letters as one typo
+function lev(a,b){
+  const d=[];for(let i=0;i<=a.length;i++){d[i]=[i];for(let j=1;j<=b.length;j++)d[i][j]=i?0:j;}
+  for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++){
+    d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+    if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1]) d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);
+  }
+  return d[a.length][b.length];
+}
+const near=(k,c)=>{const tol=c.length>=12?2:c.length>=6?1:0; return tol>0&&k[0]===c[0]&&Math.abs(c.length-k.length)<=tol&&lev(k,c)<=tol;};
+// "mi chiamo *" accepts "mi chiamo" and "mi chiamo emin"
+const tmpl=(k,c)=>c.includes('*')&&new RegExp('^'+c.replace(/ /g,'').split('*').map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('.*')+'$').test(k.replace(/ /g,''));
+// mode 0: exact while typing · 1: Enter (allows a typo) · 2: voice, interim · 3: voice, final
+function matches(v,cands,mode){
+  const parts=mode?[v].concat(v.split(/[,;\/]/)):[v];
+  for(const p of parts){
+    const k=key(p); if(!k) continue;
+    if(cands.includes(k)) return true;
+    for(const c of cands){
+      if(tmpl(k,c)) return true;
+      if((mode===1||mode===3)&&near(k,c)) return true;
+      if(mode>=2&&c.length>1&&(' '+k+' ').includes(' '+c+' ')) return true;
+    }
+  }
+  return false;
+}
+
+const SKEY='quaderno-scores-v1';
+let scores=[];
+try{const v=JSON.parse(localStorage.getItem(SKEY)||'[]'); if(Array.isArray(v)) scores=v;}catch(e){}
+function saveScores(){try{localStorage.setItem(SKEY,JSON.stringify(scores));}catch(e){}}
+const byRank=(a,b)=>b.n-a.n||a.ms-b.ms||a.at-b.at;
+const fmtDur=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+const fmtWhen=t=>new Date(t).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const DIRL={it:'IT → DE',de:'DE → IT'};
+function rankHTML(hl){
+  scores.sort(byRank);
+  if(!scores.length) return '<li class="empty" style="display:block;border:0;padding:4px 0">Ancora nessun punteggio.</li>';
+  const rows=scores.slice(0,10).map((s,i)=>[s,i]), at=hl?scores.indexOf(hl):-1;
+  if(at>=10) rows.push([hl,at]);
+  return rows.map(([s,i])=>'<li'+(s===hl?' class="new"':'')+'><span class="pos">'+(i+1)+'.</span><span class="pts">'+s.n+'<small>giuste</small></span><span class="dir">'+DIRL[s.dir]+'</span>'+
+    '<span class="det">'+s.w+(s.w===1?' parola':' parole')+' · '+fmtDur(s.ms)+' min · '+fmtWhen(s.at)+'</span></li>').join('');
+}
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const I_SND='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
+const I_MUTE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></svg>';
+let T=null, clockTimer=0, acceptTimer=0;
+const knownPool=()=>W.filter(w=>st.known[w.id]);
+
+function updToggles(){
+  $('sfSnd').setAttribute('aria-pressed',!!st.sound); $('sfSnd').innerHTML=(st.sound?I_SND:I_MUTE)+'Suoni';
+  $('sfSnd2').setAttribute('aria-pressed',!!st.sound); $('sfSnd2').innerHTML=st.sound?I_SND:I_MUTE;
+  $('sfVoice').hidden=$('sfMic').hidden=!SR;
+  $('sfVoice').setAttribute('aria-pressed',!!st.mic); $('sfMic').setAttribute('aria-pressed',!!st.mic);
+}
+function renderSfIntro(){
+  const n=knownPool().length;
+  $('sfLead').innerHTML=n?'Ti interrogo sulle tue <b>'+n+'</b> parole sapute, una dopo l’altra, finché non sbagli.'
+    :'Non hai ancora parole sapute. In <b>Impara</b> segna con «Lo so» le parole che conosci, poi torna qui.';
+  $('sfStart').disabled=!n;
+  $('sfRank').innerHTML=rankHTML(null);
+  $('sfClear').hidden=!scores.length; $('sfClearConfirm').hidden=true;
+  updToggles();
+}
+
+// sounds are synthesized on the spot, so there is no loading delay
+let ac=null;
+function audioOn(){ if(!st.sound) return; try{ ac=ac||new (window.AudioContext||window.webkitAudioContext)(); if(ac.state!=='running') ac.resume(); }catch(e){} }
+function tone(type,f0,f1,dur,vol,t){
+  const o=ac.createOscillator(), g=ac.createGain(); o.type=type; o.frequency.setValueAtTime(f0,t);
+  if(f1) o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+.008); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+dur+.02);
+}
+function sfx(ok){
+  if(!st.sound) return;
+  if(!ok&&navigator.vibrate) try{navigator.vibrate(90);}catch(e){}
+  if(!ac) return; const t=ac.currentTime;
+  try{ if(ok){ tone('triangle',988,0,.07,.22,t); tone('triangle',1480,0,.12,.2,t+.06); }
+       else { tone('sawtooth',196,92,.34,.14,t); tone('square',147,70,.34,.07,t); } }catch(e){}
+}
+
+// voice answers: one short recognition session per word, restarted on every new word
+let rec=null, recWant=false, quick=0;
+function micOn(){ if(!SR||!T||T.over) return; recWant=true; quick=0; if(!rec) spawn(); }
+function micOff(){ recWant=false; const r=rec; rec=null; if(r) try{r.abort();}catch(e){} $('sfMic').classList.remove('live'); }
+function micNext(){
+  if(!recWant) return;
+  const r=rec; if(!r){ spawn(); return; }
+  r.next=true; try{r.abort();}catch(e){}
+  setTimeout(()=>{ if(rec===r){ rec=null; spawn(); } },400);
+}
+function spawn(){
+  if(!SR||!recWant||!T||T.over||rec) return;
+  const r=new SR(), word=T.cur; rec=r; r.t0=performance.now();
+  r.lang=T.dir==='it'?'de-DE':'it-IT'; r.interimResults=true; r.continuous=false; r.maxAlternatives=5;
+  r.onstart=()=>{ if(rec===r) $('sfMic').classList.add('live'); };
+  r.onresult=e=>{
+    if(rec!==r||r.next||!T||T.over||T.cur!==word) return;
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const res=e.results[i], alts=Array.from(res,a=>a.transcript.trim()).filter(Boolean);
+      if(!alts.length) continue;
+      $('sfHeard').textContent='«'+alts[0]+'»';
+      if(alts.some(a=>matches(a,T.cands,2))){ correct(); return; }
+      if(res.isFinal){ if(alts.some(a=>matches(a,T.cands,3))) correct(); else endRun(true,alts[0]); return; }
+    }
+  };
+  r.onerror=e=>{
+    if(rec!==r) return;
+    if(/not-allowed|service-not-allowed|audio-capture/.test(e.error)){ st.mic=false; save(); recWant=false; updToggles(); $('sfHeard').textContent='Microfono non disponibile'; if(T&&!T.over) $('sfIn').focus(); }
+  };
+  r.onend=()=>{
+    if(rec!==r) return; rec=null; $('sfMic').classList.remove('live');
+    quick=(!r.next&&performance.now()-r.t0<400)?quick+1:0;
+    if(quick>4){ recWant=false; $('sfHeard').textContent='Riconoscimento vocale non disponibile'; return; }
+    spawn();
+  };
+  try{ r.start(); }catch(e){ rec=null; }
+}
+
+const elapsed=()=>T?((T.over?T.pauseAt:performance.now())-T.t0-T.paused):0;
+function flash(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function startRun(){
+  const pool=knownPool(); if(!pool.length) return;
+  audioOn();
+  T={dir:st.dir,pool,q:[],n:0,t0:performance.now(),paused:0,pauseAt:0,cur:null,last:null,cands:[],over:false,entry:null,endAt:0};
+  $('sfIntro').hidden=true; $('sfRun').hidden=false; $('sfPlay').hidden=false; $('sfEnd').hidden=true; $('sfCard').hidden=false;
+  $('sfN').textContent='0'; $('sfClock').textContent='0:00';
+  updToggles(); nextWord();
+  clearInterval(clockTimer); clockTimer=setInterval(()=>{ if(T&&!T.over) $('sfClock').textContent=fmtDur(elapsed()); },250);
+  if(st.mic&&SR) micOn(); else $('sfIn').focus();
+}
+function nextWord(){
+  clearTimeout(acceptTimer);
+  if(!T.q.length){ T.q=shuffle(T.pool.slice()); if(T.q.length>1&&T.q[0]===T.last) T.q.push(T.q.shift()); }
+  const w=T.cur=T.last=T.q.shift();
+  T.cands=answers(T.dir==='it'?w.de:w.it);
+  $('sfCard').classList.remove('ko');
+  $('sfCat').textContent=CATS[w.c]+' · '+w.s;
+  $('sfWord').innerHTML=T.dir==='it'?fmtIt(w.it):esc(w.de);
+  $('sfFix').hidden=true;
+  const inp=$('sfIn'); inp.value=''; inp.lang=T.dir==='it'?'de':'it';
+  $('sfHeard').textContent='';
+}
+function correct(){
+  if(!T||T.over) return;
+  T.n++; $('sfN').textContent=T.n; flash($('sfN'),'pop'); flash($('sfCard'),'ok'); sfx(true);
+  nextWord(); micNext();
+}
+function endRun(wrong,given){
+  if(!T||T.over) return;
+  T.over=true; T.pauseAt=performance.now(); T.endAt=T.pauseAt; clearTimeout(acceptTimer); micOff();
+  const ms=Math.round(elapsed()), words=T.n+(wrong?1:0);
+  $('sfClock').textContent=fmtDur(ms);
+  if(wrong){
+    sfx(false);
+    const w=T.cur, card=$('sfCard');
+    card.classList.remove('ok'); flash(card,'ko');
+    $('sfFix').innerHTML='<div class="answer">'+(T.dir==='it'?esc(w.de):fmtIt(w.it))+'</div>'+(given?'<div class="given">'+esc(given)+'</div>':'');
+    $('sfFix').hidden=false;
+  } else $('sfCard').hidden=true;
+  T.entry=null;
+  if(words>0){
+    T.entry={n:T.n,w:words,ms,at:Date.now(),dir:T.dir};
+    scores.push(T.entry); scores.sort(byRank); if(scores.length>100) scores.length=100; saveScores();
+  }
+  const pos=T.entry?scores.indexOf(T.entry):-1;
+  $('sfTitle').textContent=pos===0&&T.n>0?'Nuovo record!':wrong?'Sbagliato!':'Fine';
+  $('sfStats').innerHTML='<b>'+T.n+'</b> giuste · '+words+(words===1?' parola':' parole')+' · '+fmtDur(ms)+' min'+(pos>=0?' · '+(pos+1)+'° posto':'');
+  $('sfOverride').hidden=!wrong; $('sfEndBtns').style.gridTemplateColumns=wrong?'':'1fr';
+  $('sfRank2').innerHTML=rankHTML(T.entry);
+  $('sfPlay').hidden=true; $('sfEnd').hidden=false;
+  $('sfAgain').focus({preventScroll:true});
+}
+function initSfida(){
+  const inp=$('sfIn');
+  // a correct answer is accepted the moment it is typed; Enter is only needed to give up on a wrong one
+  inp.addEventListener('input',()=>{
+    if(!T||T.over) return; clearTimeout(acceptTimer);
+    const k=key(inp.value); if(!k||!matches(inp.value,T.cands,0)) return;
+    // if a longer answer starts with what was typed ("l" vs "lo"), wait a moment before accepting
+    if(T.cands.some(c=>c!==k&&c.startsWith(k))) acceptTimer=setTimeout(()=>{ if(T&&!T.over&&key(inp.value)===k) correct(); },650);
+    else correct();
+  });
+  inp.addEventListener('keydown',e=>{
+    if(e.key!=='Enter'||e.isComposing) return; e.preventDefault();
+    if(!T||T.over) return; const v=inp.value.trim(); if(!v) return;
+    if(matches(v,T.cands,1)) correct(); else endRun(true,v);
+  });
+  $('sfStart').onclick=startRun;
+  $('sfAgain').onclick=()=>{ if(T&&performance.now()-T.endAt<450) return; startRun(); };
+  $('sfSkip').onclick=()=>endRun(true,null);
+  $('sfStop').onclick=()=>endRun(false);
+  $('sfOverride').onclick=()=>{
+    if(!T||!T.over) return;
+    if(T.entry){ const i=scores.indexOf(T.entry); if(i>=0){ scores.splice(i,1); saveScores(); } T.entry=null; }
+    T.paused+=performance.now()-T.pauseAt; T.over=false;
+    $('sfEnd').hidden=true; $('sfPlay').hidden=false;
+    correct();
+    if(st.mic&&SR) micOn(); else inp.focus();
+  };
+  $('sfBack').onclick=()=>{ T=null; clearInterval(clockTimer); $('sfRun').hidden=true; $('sfIntro').hidden=false; renderSfIntro(); };
+  const toggleSound=()=>{ st.sound=!st.sound; save(); updToggles(); if(st.sound) audioOn(); };
+  $('sfSnd').onclick=toggleSound; $('sfSnd2').onclick=toggleSound;
+  $('sfVoice').onclick=()=>{ st.mic=!st.mic; save(); updToggles(); };
+  $('sfMic').onclick=()=>{ st.mic=!st.mic; save(); updToggles(); if(st.mic){ inp.blur(); micOn(); } else { micOff(); inp.focus(); } };
+  $('sfClear').onclick=()=>{ $('sfClearConfirm').hidden=false; };
+  $('sfClearNo').onclick=()=>{ $('sfClearConfirm').hidden=true; };
+  $('sfClearYes').onclick=()=>{ scores=[]; saveScores(); renderSfIntro(); };
+  // the clock stops while the app is in the background
+  document.addEventListener('visibilitychange',()=>{
+    if(!T||T.over) return;
+    if(document.hidden){ T.hiddenAt=performance.now(); micOff(); }
+    else if(T.hiddenAt){ T.paused+=performance.now()-T.hiddenAt; T.hiddenAt=0; if(st.mic&&SR&&!$('v-sfida').hidden) micOn(); }
+  });
+  renderSfIntro();
+}
+
 /* ---- Tabs ---- */
 function show(v){
-  ['impara','categorie','cerca'].forEach(x=>{$('v-'+x).hidden=x!==v;});
+  if(v!=='sfida'&&T&&!T.over) endRun(false);
+  ['impara','categorie','cerca','sfida'].forEach(x=>{$('v-'+x).hidden=x!==v;});
   document.querySelectorAll('nav button').forEach(b=>{ if(b.dataset.v===v) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   window.scrollTo(0,0);
   if(v==='cerca') setTimeout(()=>$('q').focus(),50);
+  if(v==='sfida'&&!T) renderSfIntro();
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
 
-updateScore(); initImpara(); renderCats(); build();
+updateScore(); initImpara(); renderCats(); build(); initSfida();
 $('q').dispatchEvent(new Event('input'));
 </script>
 
