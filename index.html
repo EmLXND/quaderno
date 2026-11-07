@@ -8,6 +8,8 @@
 <link rel="manifest" href="manifest.json">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
+<!-- bump on every change: the installed app compares this with the online copy to update itself -->
+<meta name="app-version" content="2026-11-07.3">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -104,6 +106,10 @@ nav button{font:inherit;font-size:.78rem;background:none;border:0;color:var(--mu
 nav button svg{width:22px;height:22px}
 nav button[aria-current="page"]{color:var(--ink);font-weight:600}
 .empty{color:var(--muted);font-size:.95rem;padding:8px 0}
+.ver{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
+.upd{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:7;display:flex;justify-content:center;padding:0 16px;pointer-events:none}
+.upd>div{pointer-events:auto;width:100%;max-width:528px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:var(--paper);border-radius:12px;padding:8px 8px 8px 14px;font-size:.9rem;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.upd button{font:inherit;font-weight:600;border:0;border-radius:8px;background:var(--paper);color:var(--ink);padding:8px 12px;cursor:pointer}
 
 /* sfida: endless test on known words, ends at the first mistake */
 .lead{margin:0;color:var(--muted);font-size:.95rem;line-height:1.45}
@@ -175,6 +181,7 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
       <div class="catlist" id="catlist"></div>
       <button class="link" id="reset" style="align-self:flex-start">Azzera i progressi</button>
       <div id="resetConfirm" hidden class="row"><span class="empty">Cancellare tutti i progressi?</span><button class="btn" id="resetYes">Sì, azzera</button><button class="btn" id="resetNo">No</button></div>
+      <div class="ver"><span id="verMsg"></span><button class="link" id="verCheck">Controlla aggiornamenti</button></div>
     </section>
 
     <section class="view" id="v-cerca" hidden>
@@ -226,6 +233,8 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
     </section>
   </main>
 </div>
+
+<div class="upd" id="updBar" hidden><div><span>Nuova versione disponibile</span><button id="updBtn">Aggiorna</button></div></div>
 
 <nav aria-label="Sezioni"><div class="in">
   <button data-v="impara" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5v14"/></svg>Impara</button>
@@ -578,6 +587,38 @@ function initSfida(){
   renderSfIntro();
 }
 
+/* ---- Aggiornamenti ---- */
+// An installed home-screen app can keep running an old copy for a long time. The
+// app-version meta tag is compared with the online copy at launch, when the app returns
+// to the foreground, and on demand; a newer version is loaded via a fresh URL.
+const APP_V=document.querySelector('meta[name="app-version"]').content;
+const VER_RE=new RegExp('name="app-'+'version" content="([^"]+)"');
+let lastCheck=0;
+async function latestVersion(){
+  const r=await fetch(location.pathname+'?check='+Date.now(),{cache:'no-store'});
+  if(!r.ok) throw new Error(r.status);
+  const m=(await r.text()).match(VER_RE); return m?m[1]:null;
+}
+function reloadTo(v){ try{sessionStorage.setItem('quaderno-upd',v);}catch(e){} location.replace(location.pathname+'?v='+encodeURIComponent(v)); }
+async function checkUpdate(manual){
+  lastCheck=Date.now();
+  const msg=$('verMsg'); if(manual) msg.textContent='Controllo…';
+  let v=null;
+  try{ v=await latestVersion(); }catch(e){ if(manual) msg.textContent='Controllo non riuscito, sei offline?'; return; }
+  if(!v||v===APP_V){ if(manual) msg.textContent='Aggiornata · versione '+APP_V; return; }
+  let tried=null; try{ tried=sessionStorage.getItem('quaderno-upd'); }catch(e){}
+  // never interrupt a running Sfida, and never reload twice for the same version on its own
+  if(manual||(!(T&&!T.over)&&tried!==v)) reloadTo(v);
+  else { $('updBtn').onclick=()=>reloadTo(v); $('updBar').hidden=false; }
+}
+function initUpdates(){
+  $('verMsg').textContent='Versione '+APP_V;
+  $('verCheck').onclick=()=>checkUpdate(true);
+  if(/[?&]v=/.test(location.search)) try{ history.replaceState(null,'',location.pathname); }catch(e){}
+  setTimeout(()=>checkUpdate(false),800);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&Date.now()-lastCheck>20000) checkUpdate(false); });
+}
+
 /* ---- Tabs ---- */
 function show(v){
   if(v!=='sfida'&&T&&!T.over) endRun(false);
@@ -589,7 +630,7 @@ function show(v){
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
 
-updateScore(); initImpara(); renderCats(); build(); initSfida();
+updateScore(); initImpara(); renderCats(); build(); initSfida(); initUpdates();
 $('q').dispatchEvent(new Event('input'));
 </script>
 
