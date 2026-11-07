@@ -9,7 +9,7 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-07.3">
+<meta name="app-version" content="2026-11-07.4">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -380,9 +380,49 @@ function lev(a,b){
 const near=(k,c)=>{const tol=c.length>=12?2:c.length>=6?1:0; return tol>0&&k[0]===c[0]&&Math.abs(c.length-k.length)<=tol&&lev(k,c)<=tol;};
 // "mi chiamo *" accepts "mi chiamo" and "mi chiamo emin"
 const tmpl=(k,c)=>c.includes('*')&&new RegExp('^'+c.replace(/ /g,'').split('*').map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('.*')+'$').test(k.replace(/ /g,''));
+// Speech recognizers often write numbers as digits ("18", "1.000", "1."), so for voice answers
+// digits are also tried as words in the answer language ("achtzehn" / "diciotto", "erster" / "primo").
+const DE1=['null','eins','zwei','drei','vier','fünf','sechs','sieben','acht','neun','zehn','elf','zwölf','dreizehn','vierzehn','fünfzehn','sechzehn','siebzehn','achtzehn','neunzehn'];
+const DE10=['','','zwanzig','dreißig','vierzig','fünfzig','sechzig','siebzig','achtzig','neunzig'];
+const IT1=['zero','uno','due','tre','quattro','cinque','sei','sette','otto','nove','dieci','undici','dodici','tredici','quattordici','quindici','sedici','diciassette','diciotto','diciannove'];
+const IT10=['','','venti','trenta','quaranta','cinquanta','sessanta','settanta','ottanta','novanta'];
+const ITORD=['','primo','secondo','terzo','quarto','quinto','sesto','settimo','ottavo','nono','decimo'];
+const cross=(a,b)=>a.flatMap(x=>b.map(y=>x+y));
+function numDe(n){
+  if(n<20) return [DE1[n]];
+  if(n<100){ const u=n%10, t=DE10[n/10|0]; return [u?(u===1?'ein':DE1[u])+'und'+t:t]; }
+  if(n<1000){ const h=n/100|0, r=n%100; return cross(h===1?['hundert','einhundert']:[DE1[h]+'hundert'], r?numDe(r):['']); }
+  if(n<1e6){ const k=n/1000|0, r=n%1000; return cross(k===1?['tausend','eintausend']:numDe(k).map(x=>x.replace(/eins$/,'ein')+'tausend'), r?numDe(r):['']); }
+  return n===1e6?['eine Million']:n===1e9?['eine Milliarde']:[];
+}
+function numIt(n){
+  if(n<20) return [IT1[n]];
+  if(n<100){ const u=n%10; let t=IT10[n/10|0]; if(!u) return [t]; if(u===1||u===8) t=t.slice(0,-1); return [t+(u===3?'tré':IT1[u])]; }
+  if(n<1000){ const h=n/100|0, r=n%100, c=h===1?'cento':IT1[h]+'cento'; return r?numIt(r).map(x=>(r>=80&&r<90?c.slice(0,-1):c)+x):[c]; }
+  if(n<1e6){ const k=n/1000|0, r=n%1000; return cross(k===1?['mille']:numIt(k).map(x=>x+'mila'), r?numIt(r):['']); }
+  return n===1e6?['un milione']:n===1e9?['un miliardo']:[];
+}
+const ordDe=n=>n===1?['erster','erste']:n===3?['dritter','dritte']:numDe(n).map(c=>c+(n<20?'ter':'ster')).concat(n===7?['siebter']:[]);
+const ordIt=n=>n<=10?[ITORD[n]]:numIt(n).map(c=>c.replace(/[aeioué]$/,'')+'esimo');
+function numForms(t,lang){
+  if(!/\d/.test(t)) return [];
+  t=t.replace(/(\d)[.,'’\s](?=\d{3}(?!\d))/g,'$1').replace(/(^|\s)1\s+(?=(?:million|milliarde|milione|miliardo)\b)/gi,'$1');
+  let vs=[''];
+  t.split(/(\d+[.°ºª]?)/).forEach((p,i)=>{
+    let opts=[p];
+    if(i%2){
+      const n=+p.replace(/\D/g,''), w=(lang==='de'?numDe:numIt)(n).concat(/[.°ºª]$/.test(p)?(lang==='de'?ordDe:ordIt)(n):[]);
+      if(w.length) opts=w.map(x=>' '+x+' ');
+    }
+    vs=cross(vs,opts).slice(0,24);
+  });
+  return vs;
+}
 // mode 0: exact while typing · 1: Enter (allows a typo) · 2: voice, interim · 3: voice, final
-function matches(v,cands,mode){
-  const parts=mode?[v].concat(v.split(/[,;\/]/)):[v];
+function matches(v,cands,mode,lang){
+  if(!lang) lang=T&&T.dir==='de'?'it':'de';
+  let parts=mode?[v].concat(v.split(/[,;\/]/)):[v];
+  if(mode>=2) parts=parts.concat(numForms(v,lang));
   for(const p of parts){
     const k=key(p); if(!k) continue;
     if(cands.includes(k)) return true;
