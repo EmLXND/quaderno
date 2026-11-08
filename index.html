@@ -9,7 +9,7 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-07.4">
+<meta name="app-version" content="2026-11-08.1">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -107,9 +107,17 @@ nav button svg{width:22px;height:22px}
 nav button[aria-current="page"]{color:var(--ink);font-weight:600}
 .empty{color:var(--muted);font-size:.95rem;padding:8px 0}
 .ver{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);border-top:1px solid var(--line);padding-top:8px;margin-top:8px}
-.upd{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:7;display:flex;justify-content:center;padding:0 16px;pointer-events:none}
-.upd>div{pointer-events:auto;width:100%;max-width:528px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:var(--paper);border-radius:12px;padding:8px 8px 8px 14px;font-size:.9rem;box-shadow:0 4px 16px rgba(0,0,0,.18)}
-.upd button{font:inherit;font-weight:600;border:0;border-radius:8px;background:var(--paper);color:var(--ink);padding:8px 12px;cursor:pointer}
+.dock{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:7;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 16px;pointer-events:none}
+.dock>div{pointer-events:auto;width:100%;max-width:528px;min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ink);color:var(--paper);border-radius:12px;padding:6px 6px 6px 14px;font-size:.9rem;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+.dock>div[hidden]{display:none}
+.dock span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dock button{flex:none;font:inherit;font-weight:600;border:0;border-radius:8px;background:var(--paper);color:var(--ink);padding:8px 12px;cursor:pointer}
+.card.hold-yes{background-color:var(--okbg);border-color:var(--ok);color:var(--ok)}
+.card.hold-no{background-color:var(--kobg);border-color:var(--margin);color:var(--margin)}
+.card .tick{position:absolute;left:0;bottom:0;height:3px;width:100%;background:currentColor;transform-origin:left;animation:tick 1s linear forwards}
+@keyframes tick{to{transform:scaleX(0)}}
+@media (prefers-reduced-motion:no-preference){.dock>div:not([hidden]){animation:rise .18s ease-out}}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}}
 
 /* sfida: endless test on known words, ends at the first mistake */
 .lead{margin:0;color:var(--muted);font-size:.95rem;line-height:1.45}
@@ -234,7 +242,10 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
   </main>
 </div>
 
-<div class="upd" id="updBar" hidden><div><span>Nuova versione disponibile</span><button id="updBtn">Aggiorna</button></div></div>
+<div class="dock">
+  <div id="toast" role="status" hidden><span id="toastMsg"></span><button id="toastBtn">Annulla</button></div>
+  <div id="updBar" hidden><span>Nuova versione disponibile</span><button id="updBtn">Aggiorna</button></div>
+</div>
 
 <nav aria-label="Sezioni"><div class="in">
   <button data-v="impara" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5v14"/></svg>Impara</button>
@@ -270,11 +281,37 @@ function updateScore(){
 }
 
 /* ---- Impara ---- */
-let queue=[], cur=null, flipped=false;
+let queue=[], cur=null, flipped=false, hold=null, undoWord=null, toastTimer=0;
 function pool(){ return W.filter(w=>(st.cat==='all'||w.c==+st.cat)&&(st.inc||!st.known[w.id])); }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
 function build(){ queue=shuffle(pool().slice()); next(); }
-function next(){ cur=queue.shift()||null; flipped=false; render(); }
+function next(){ if(hold){ clearTimeout(hold.timer); hold=null; } cur=queue.shift()||null; flipped=false; render(); }
+const requeue=w=>queue.splice(Math.min(queue.length,4),0,w);
+// "Lo so" / "Ancora": if the card is still face down, show the translation for a second first
+function act(kind){
+  if(!cur) return;
+  if(hold){ hold.go(); return; }          // tapping again skips the wait
+  const w=cur;
+  if(kind==='yes'){ st.known[w.id]=1; save(); updateScore(); renderCats(); toast('Saputa: '+w.it,true); }
+  const go=()=>{ if(kind==='no'&&cur===w) requeue(w); next(); };
+  if(flipped){ go(); return; }
+  flipped=true; render();
+  const card=$('card'); card.classList.add(kind==='yes'?'hold-yes':'hold-no'); card.insertAdjacentHTML('beforeend','<div class="tick"></div>');
+  if(st.dir==='de') speak(w.it);
+  hold={go,timer:setTimeout(go,1000)};
+}
+function toast(msg,undo){
+  $('toastMsg').textContent=msg; $('toastBtn').hidden=!undo; undoWord=undo?cur:null;
+  $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ $('toast').hidden=true; undoWord=null; },undo?5000:1600);
+}
+// undoing "Lo so" unmarks the word and brings it back in a few cards
+function undoKnown(){
+  const w=undoWord; if(!w) return;
+  delete st.known[w.id]; save(); updateScore(); renderCats();
+  if(hold&&cur===w){ clearTimeout(hold.timer); hold=null; requeue(w); next(); }
+  else if(pool().includes(w)&&!queue.includes(w)){ requeue(w); if(cur) $('left').textContent='Restano '+(queue.length+1); else next(); }
+  toast('Annullato: «'+w.it+'» torna tra poco',false);
+}
 function render(){
   const s=$('stage');
   $('left').textContent=cur?('Restano '+(queue.length+1)):'';
@@ -295,11 +332,11 @@ function render(){
   '</div>'+
   '<div class="actions"><button class="btn" id="no">Ancora</button><button class="btn yes" id="yes">Lo so</button></div>';
   const card=$('card');
-  card.onclick=e=>{ if(e.target.closest('#spk')) return; flipped=!flipped; render(); if(flipped&&st.dir==='de') speak(cur.it); };
+  card.onclick=e=>{ if(e.target.closest('#spk')) return; if(hold){ hold.go(); return; } flipped=!flipped; render(); if(flipped&&st.dir==='de') speak(cur.it); };
   card.onkeydown=e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault();card.click();} };
   if(voiceOK) $('spk').onclick=e=>{e.stopPropagation();speak(cur.it);};
-  $('yes').onclick=()=>{ st.known[cur.id]=1; save(); updateScore(); renderCats(); next(); };
-  $('no').onclick=()=>{ queue.splice(Math.min(queue.length,4),0,cur); next(); };
+  $('yes').onclick=()=>act('yes');
+  $('no').onclick=()=>act('no');
 }
 // direction is shared by Impara and Sfida
 function setDir(d){st.dir=d;document.querySelectorAll('[data-dir]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.dir===d));save();flipped=false;render();}
@@ -310,6 +347,7 @@ function initImpara(){
   document.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>setDir(b.dataset.dir)); setDir(st.dir);
   $('incKnown').checked=st.inc; $('incKnown').onchange=e=>{st.inc=e.target.checked;save();build();};
   $('reshuffle').onclick=build;
+  $('toastBtn').onclick=undoKnown;
 }
 
 /* ---- Categorie ---- */
