@@ -9,7 +9,7 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-08.1">
+<meta name="app-version" content="2026-11-08.2">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -169,7 +169,7 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
 <div class="wrap">
   <header>
     <h1>Quaderno</h1>
-    <div><div class="score"><b id="kn">0</b> / <span id="tot">0</span> sapute</div><div class="bar"><i id="kbar"></i></div></div>
+    <div><div class="score"><b id="kn">0</b> / <span id="tot">0</span> sapute <span id="kdir"></span></div><div class="bar"><i id="kbar"></i></div></div>
   </header>
   <main>
     <section class="view" id="v-impara">
@@ -263,6 +263,35 @@ const KEY='quaderno-v1';
 let st={known:{},cat:'all',dir:'it',inc:false,sound:true,mic:false};
 try{const v=JSON.parse(localStorage.getItem(KEY)||'null'); if(v) st=Object.assign(st,v);}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+
+/* ---- Progress & spaced repetition ----
+   Each direction keeps its own record per word: st.srs[dir][id] = [box, dueDay].
+   Box 0 = being learned; box ≥ 1 = known, due again on dueDay (local day, rolling over at 4:00).
+   "Lo so" on a due word moves it up a box (longer pause); "Ancora" or a wrong Sfida answer
+   sends it back to box 0. The legacy st.known map is only read once, for the migration. */
+const IV=[0,1,3,7,16,35,80,180];   // days until the next review, by box
+const today=()=>{ const d=new Date(Date.now()-4*36e5); return Math.floor((d.getTime()-d.getTimezoneOffset()*6e4)/864e5); };
+if(!st.srs||!st.srs.it||!st.srs.de){
+  // words marked before this existed count as known IT → DE, with first reviews spread over the next week
+  st.srs={it:{},de:{}}; const t=today();
+  Object.keys(st.known||{}).forEach(id=>{ st.srs.it[id]=[2,t+1+Math.floor(Math.random()*7)]; });
+  save();
+}
+const srsOf=(w,dir=st.dir)=>st.srs[dir][w.id];
+const isKnown=(w,dir=st.dir)=>{ const r=srsOf(w,dir); return !!r&&r[0]>0; };
+const isDue=(w,dir=st.dir,t=today())=>{ const r=srsOf(w,dir); return !!r&&r[0]>0&&r[1]<=t; };
+const inDays=n=>n<=0?'oggi':n===1?'domani':'tra '+n+' giorni';
+function grade(w,ok,dir=st.dir){
+  const m=st.srs[dir], prev=m[w.id]?m[w.id].slice():null, t=today();
+  if(!ok) m[w.id]=[0,t];
+  else if(!(prev&&prev[0]>0&&prev[1]>t)){   // a known word that is not due yet stays as it is
+    // known at first sight → box 2 (3 days); relearned → box 1 (1 day); due review → next box
+    const b=!prev?2:prev[0]===0?1:Math.min(prev[0]+1,IV.length-1), d=IV[b];
+    m[w.id]=[b,t+(d>=7?Math.round(d*(.9+Math.random()*.2)):d)];
+  }
+  save(); return prev;
+}
+function restore(w,prev,dir){ if(prev) st.srs[dir][w.id]=prev; else delete st.srs[dir][w.id]; save(); }
 const $=id=>document.getElementById(id);
 const esc=t=>t.replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
 function fmtIt(t){
@@ -276,23 +305,37 @@ function speak(t){ if(!voiceOK) return; try{speechSynthesis.cancel();const u=new
   const v=speechSynthesis.getVoices().find(x=>/^it/i.test(x.lang)); if(v) u.voice=v; speechSynthesis.speak(u);}catch(e){} }
 
 function updateScore(){
-  const n=W.filter(w=>st.known[w.id]).length;
+  const n=W.filter(w=>isKnown(w)).length;
   $('kn').textContent=n; $('tot').textContent=W.length; $('kbar').style.width=(100*n/W.length)+'%';
+  $('kdir').textContent=st.dir==='it'?'IT→DE':'DE→IT';
 }
 
 /* ---- Impara ---- */
-let queue=[], cur=null, flipped=false, hold=null, undoWord=null, toastTimer=0;
-function pool(){ return W.filter(w=>(st.cat==='all'||w.c==+st.cat)&&(st.inc||!st.known[w.id])); }
+let queue=[], cur=null, flipped=false, hold=null, undoInfo=null, toastTimer=0, builtAt=0, stale=false;
+function pool(){ return W.filter(w=>st.cat==='all'||w.c==+st.cat); }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
-function build(){ queue=shuffle(pool().slice()); next(); }
+// order: reviews due today, then words being (re)learned, then new words; resting known words only on request
+function build(){
+  const t=today(), due=[], learn=[], fresh=[], rest=[];
+  for(const w of pool()){ const r=srsOf(w); (!r?fresh:r[0]===0?learn:r[1]<=t?due:rest).push(w); }
+  queue=[...shuffle(due),...shuffle(learn),...shuffle(fresh),...(st.inc?shuffle(rest):[])];
+  builtAt=Date.now(); stale=false; next();
+}
 function next(){ if(hold){ clearTimeout(hold.timer); hold=null; } cur=queue.shift()||null; flipped=false; render(); }
 const requeue=w=>queue.splice(Math.min(queue.length,4),0,w);
+function meta(){
+  if(!cur){ $('left').textContent=''; return; }
+  const t=today(); let d=0,n=0,k=0;
+  for(const w of [cur,...queue]){ const r=srsOf(w); if(!r||r[0]===0) n++; else if(r[1]<=t) d++; else k++; }
+  $('left').textContent=[d&&d+' da ripassare',n&&n+' da imparare',k&&k+' già sapute'].filter(Boolean).join(' · ');
+}
 // "Lo so" / "Ancora": if the card is still face down, show the translation for a second first
 function act(kind){
   if(!cur) return;
   if(hold){ hold.go(); return; }          // tapping again skips the wait
-  const w=cur;
-  if(kind==='yes'){ st.known[w.id]=1; save(); updateScore(); renderCats(); toast('Saputa: '+w.it,true); }
+  const w=cur, dir=st.dir;
+  grade(w,kind==='yes',dir); updateScore(); renderCats();
+  if(kind==='yes'){ const r=srsOf(w,dir); toast('«'+w.it+'» · ripasso '+inDays(r[1]-today()),{w,dir}); }
   const go=()=>{ if(kind==='no'&&cur===w) requeue(w); next(); };
   if(flipped){ go(); return; }
   flipped=true; render();
@@ -301,26 +344,32 @@ function act(kind){
   hold={go,timer:setTimeout(go,1000)};
 }
 function toast(msg,undo){
-  $('toastMsg').textContent=msg; $('toastBtn').hidden=!undo; undoWord=undo?cur:null;
-  $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ $('toast').hidden=true; undoWord=null; },undo?5000:1600);
+  $('toastMsg').textContent=msg; $('toastBtn').hidden=!undo; undoInfo=undo||null;
+  $('toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{ $('toast').hidden=true; undoInfo=null; },undo?5000:1600);
 }
-// undoing "Lo so" unmarks the word and brings it back in a few cards
+// undoing "Lo so" turns it into "Ancora": the word goes back to learning and returns in a few cards
 function undoKnown(){
-  const w=undoWord; if(!w) return;
-  delete st.known[w.id]; save(); updateScore(); renderCats();
+  if(!undoInfo) return; const {w,dir}=undoInfo;
+  grade(w,false,dir); updateScore(); renderCats();
   if(hold&&cur===w){ clearTimeout(hold.timer); hold=null; requeue(w); next(); }
-  else if(pool().includes(w)&&!queue.includes(w)){ requeue(w); if(cur) $('left').textContent='Restano '+(queue.length+1); else next(); }
-  toast('Annullato: «'+w.it+'» torna tra poco',false);
+  else if(dir===st.dir&&pool().includes(w)&&!queue.includes(w)&&cur!==w){ requeue(w); if(cur) meta(); else next(); }
+  toast('Annullato: «'+w.it+'» torna tra poco',null);
 }
 function render(){
   const s=$('stage');
-  $('left').textContent=cur?('Restano '+(queue.length+1)):'';
+  meta();
   if(!cur){
-    const all=W.filter(w=>st.cat==='all'||w.c==+st.cat).length;
-    s.innerHTML='<div class="done"><h2>Bravo!</h2><p class="empty">'+(all?'Hai finito le parole di questa scelta.':'Nessuna parola.')+'</p><button class="link" id="again">Ripassa tutte</button></div>';
+    const ws=pool(), t=today();
+    let nd=Infinity; ws.forEach(w=>{ const r=srsOf(w); if(r&&r[0]>0&&r[1]>t&&r[1]<nd) nd=r[1]; });
+    const nn=nd<Infinity?ws.filter(w=>{const r=srsOf(w); return r&&r[0]>0&&r[1]===nd;}).length:0;
+    s.innerHTML='<div class="done"><h2>Per oggi è tutto!</h2><p class="empty">'+(!ws.length?'Nessuna parola.':
+      'Hai già ripassato e imparato tutte le parole di questa scelta.'+(nn?'<br>Prossimo ripasso '+inDays(nd-t)+': '+nn+(nn===1?' parola.':' parole.'):''))+
+      '</p><button class="link" id="again">Ripassa comunque tutte</button></div>';
     $('again').onclick=()=>{st.inc=true;$('incKnown').checked=true;save();build();};
     return;
   }
+  const r=srsOf(cur), t=today();
+  const mark=r&&r[0]>0?'<div class="knownmark">'+(r[1]<=t&&!hold?'↻ da ripassare':'✓ saputa · ripasso '+inDays(r[1]-t))+'</div>':'';
   const front = st.dir==='it' ? fmtIt(cur.it) : esc(cur.de);
   const back = st.dir==='it' ? esc(cur.de) : fmtIt(cur.it);
   s.innerHTML='<div class="card" id="card" tabindex="0" role="button" aria-label="Gira la scheda">'+
@@ -328,7 +377,7 @@ function render(){
     (voiceOK?'<button class="speak" id="spk" aria-label="Ascolta la pronuncia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg></button>':'')+
     '<div class="word">'+front+'</div>'+
     (flipped?'<div class="answer">'+back+'</div>':'<div class="hint">Tocca per vedere la traduzione</div>')+
-    (st.known[cur.id]?'<div class="knownmark">✓ già saputa</div>':'')+
+    mark+
   '</div>'+
   '<div class="actions"><button class="btn" id="no">Ancora</button><button class="btn yes" id="yes">Lo so</button></div>';
   const card=$('card');
@@ -339,7 +388,11 @@ function render(){
   $('no').onclick=()=>act('no');
 }
 // direction is shared by Impara and Sfida
-function setDir(d){st.dir=d;document.querySelectorAll('[data-dir]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.dir===d));save();flipped=false;render();}
+// each direction has its own progress, so switching rebuilds everything that shows it
+function setDir(d){
+  st.dir=d; document.querySelectorAll('[data-dir]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.dir===d)); save();
+  updateScore(); renderCats(); build(); if(!T) renderSfIntro();
+}
 function initImpara(){
   const sel=$('selCat');
   sel.innerHTML='<option value="all">Tutte le categorie ('+W.length+')</option>'+CATS.map((c,i)=>'<option value="'+i+'">'+esc(c)+' ('+W.filter(w=>w.c===i).length+')</option>').join('');
@@ -348,23 +401,25 @@ function initImpara(){
   $('incKnown').checked=st.inc; $('incKnown').onchange=e=>{st.inc=e.target.checked;save();build();};
   $('reshuffle').onclick=build;
   $('toastBtn').onclick=undoKnown;
+  // reviews become due by day, so a session left open for hours gets a fresh queue
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&!hold&&Date.now()-builtAt>36e5) build(); });
 }
 
 /* ---- Categorie ---- */
 function renderCats(){
   const open=[...document.querySelectorAll('#catlist details[open]')].map(d=>d.dataset.i);
   $('catlist').innerHTML=RAW.map(([c,subs],i)=>{
-    const ws=W.filter(w=>w.c===i), k=ws.filter(w=>st.known[w.id]).length;
+    const ws=W.filter(w=>w.c===i), k=ws.filter(w=>isKnown(w)).length;
     return '<details data-i="'+i+'"'+(open.includes(String(i))?' open':'')+'><summary><span class="nm">'+esc(c)+'</span><span class="ct">'+k+' / '+ws.length+'</span><span class="bar"><i style="width:'+(100*k/ws.length)+'%"></i></span></summary>'+
       '<button class="btn study" data-study="'+i+'">Impara questa categoria</button>'+
-      subs.map(([s,l])=>'<div class="sub"><h3>'+esc(s)+'</h3><ul class="wl">'+l.map(([it,de])=>'<li><span class="k">'+(st.known[it+'|'+de]?'✓':'')+'</span><span class="it">'+fmtIt(it)+'</span><span class="de">'+esc(de)+'</span></li>').join('')+'</ul></div>').join('')+
+      subs.map(([s,l])=>'<div class="sub"><h3>'+esc(s)+'</h3><ul class="wl">'+l.map(([it,de])=>'<li><span class="k">'+(isKnown({id:it+'|'+de})?'✓':'')+'</span><span class="it">'+fmtIt(it)+'</span><span class="de">'+esc(de)+'</span></li>').join('')+'</ul></div>').join('')+
     '</details>';
   }).join('');
 }
 $('catlist').addEventListener('click',e=>{const b=e.target.closest('[data-study]'); if(!b) return; st.cat=b.dataset.study; $('selCat').value=st.cat; save(); build(); show('impara');});
 $('reset').onclick=()=>{$('resetConfirm').hidden=false;};
 $('resetNo').onclick=()=>{$('resetConfirm').hidden=true;};
-$('resetYes').onclick=()=>{st.known={};save();updateScore();renderCats();build();$('resetConfirm').hidden=true;};
+$('resetYes').onclick=()=>{st.known={};st.srs={it:{},de:{}};save();updateScore();renderCats();build();if(!T) renderSfIntro();$('resetConfirm').hidden=true;};
 
 /* ---- Cerca ---- */
 const norm=t=>t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -372,7 +427,7 @@ $('q').addEventListener('input',()=>{
   const q=norm($('q').value.trim()); const r=$('res');
   if(q.length<2){r.innerHTML='<li class="empty" style="display:block;border:0">Scrivi almeno due lettere.</li>';return;}
   const hits=W.filter(w=>norm(w.it).includes(q)||norm(w.de).includes(q)).slice(0,100);
-  r.innerHTML=hits.length?hits.map(w=>'<li><span class="k">'+(st.known[w.id]?'✓':'')+'</span><span class="it">'+fmtIt(w.it)+'</span><span class="de">'+esc(w.de)+'</span></li>').join(''):'<li class="empty" style="display:block;border:0">Nessun risultato.</li>';
+  r.innerHTML=hits.length?hits.map(w=>'<li><span class="k">'+(isKnown(w)?'✓':'')+'</span><span class="it">'+fmtIt(w.it)+'</span><span class="de">'+esc(w.de)+'</span></li>').join(''):'<li class="empty" style="display:block;border:0">Nessun risultato.</li>';
 });
 
 /* ---- Sfida ---- */
@@ -494,7 +549,7 @@ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const I_SND='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
 const I_MUTE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></svg>';
 let T=null, clockTimer=0, acceptTimer=0;
-const knownPool=()=>W.filter(w=>st.known[w.id]);
+const knownPool=()=>W.filter(w=>isKnown(w));
 
 function updToggles(){
   $('sfSnd').setAttribute('aria-pressed',!!st.sound); $('sfSnd').innerHTML=(st.sound?I_SND:I_MUTE)+'Suoni';
@@ -504,8 +559,9 @@ function updToggles(){
 }
 function renderSfIntro(){
   const n=knownPool().length;
-  $('sfLead').innerHTML=n?'Ti interrogo sulle tue <b>'+n+'</b> parole sapute, una dopo l’altra, finché non sbagli.'
-    :'Non hai ancora parole sapute. In <b>Impara</b> segna con «Lo so» le parole che conosci, poi torna qui.';
+  const dl=st.dir==='it'?'IT → DE':'DE → IT';
+  $('sfLead').innerHTML=n?'Ti interrogo sulle tue <b>'+n+'</b> parole sapute in '+dl+', una dopo l’altra, finché non sbagli. Le risposte giuste contano come ripasso, un errore rimanda la parola in Impara.'
+    :'Non hai ancora parole sapute in '+dl+'. In <b>Impara</b> segna con «Lo so» le parole che conosci, poi torna qui.';
   $('sfStart').disabled=!n;
   $('sfRank').innerHTML=rankHTML(null);
   $('sfClear').hidden=!scores.length; $('sfClearConfirm').hidden=true;
@@ -593,8 +649,10 @@ function nextWord(){
 }
 function correct(){
   if(!T||T.over) return;
+  const w=T.cur;
   T.n++; $('sfN').textContent=T.n; flash($('sfN'),'pop'); flash($('sfCard'),'ok'); sfx(true);
   nextWord(); micNext();
+  if(isDue(w,T.dir)){ grade(w,true,T.dir); stale=true; }   // a right answer on a due word counts as its review
 }
 function endRun(wrong,given){
   if(!T||T.over) return;
@@ -604,6 +662,7 @@ function endRun(wrong,given){
   if(wrong){
     sfx(false);
     const w=T.cur, card=$('sfCard');
+    T.lapsed=w; T.prev=grade(w,false,T.dir); stale=true; updateScore(); renderCats();   // back to learning in Impara
     card.classList.remove('ok'); flash(card,'ko');
     $('sfFix').innerHTML='<div class="answer">'+(T.dir==='it'?esc(w.de):fmtIt(w.it))+'</div>'+(given?'<div class="given">'+esc(given)+'</div>':'');
     $('sfFix').hidden=false;
@@ -644,6 +703,7 @@ function initSfida(){
     if(!T||!T.over) return;
     if(T.entry){ const i=scores.indexOf(T.entry); if(i>=0){ scores.splice(i,1); saveScores(); } T.entry=null; }
     T.paused+=performance.now()-T.pauseAt; T.over=false;
+    if(T.lapsed){ restore(T.lapsed,T.prev,T.dir); T.lapsed=null; updateScore(); renderCats(); }
     $('sfEnd').hidden=true; $('sfPlay').hidden=false;
     correct();
     if(st.mic&&SR) micOn(); else inp.focus();
@@ -705,10 +765,11 @@ function show(v){
   window.scrollTo(0,0);
   if(v==='cerca') setTimeout(()=>$('q').focus(),50);
   if(v==='sfida'&&!T) renderSfIntro();
+  if(v==='impara'&&stale) build();   // Sfida changed which words are due or being relearned
 }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
 
-updateScore(); initImpara(); renderCats(); build(); initSfida(); initUpdates();
+initImpara(); initSfida(); initUpdates();   // initImpara → setDir builds the score, categories and queue
 $('q').dispatchEvent(new Event('input'));
 </script>
 
