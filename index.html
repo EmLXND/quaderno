@@ -9,7 +9,7 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-09.3">
+<meta name="app-version" content="2026-11-09.4">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -292,7 +292,7 @@ const isKnown=(w,dir=st.dir)=>{ const r=srsOf(w,dir); return !!r&&r[0]>0; };
 const isDue=(w,dir=st.dir,t=today())=>{ const r=srsOf(w,dir); return !!r&&r[0]>0&&r[1]<=t; };
 const inDays=n=>n<=0?'oggi':n===1?'domani':'tra '+n+' giorni';
 // at most NEW_PER_DAY new words per day and direction: st.nd[dir] = [day, started, extra allowed]
-const NEW_PER_DAY=20;
+const NEW_PER_DAY=50;
 function newToday(dir=st.dir){ const t=today(); if(!st.nd) st.nd={}; if(!st.nd[dir]||st.nd[dir][0]!==t) st.nd[dir]=[t,0,0]; return st.nd[dir]; }
 function grade(w,ok,dir=st.dir){
   const m=st.srs[dir], prev=m[w.id]?m[w.id].slice():null, t=today();
