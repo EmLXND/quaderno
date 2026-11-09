@@ -9,14 +9,17 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-08.2">
+<meta name="app-version" content="2026-11-09.1">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
 <meta name="theme-color" content="#FAFBFD">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Figtree:wght@400;500;600&display=swap">
+<link rel="preload" href="fonts/figtree-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+/* fonts ship with the app (OFL, see fonts/) so it looks the same offline */
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:100 900;font-display:swap;src:url(fonts/fraunces-latin-opsz-normal.woff2) format("woff2")}
+@font-face{font-family:"Figtree";font-style:normal;font-weight:300 900;font-display:swap;src:url(fonts/figtree-latin-wght-normal.woff2) format("woff2")}
 /* Layout: one-screen phone app — sticky header, one scrolling view, fixed tab bar. Light = Italian squared exercise book, dark = school blackboard. */
 :root{
   --paper:#FAFBFD; --surface:#FFFFFF; --grid:rgba(60,110,200,.11);
@@ -612,6 +615,7 @@ function spawn(){
   };
   r.onerror=e=>{
     if(rec!==r) return;
+    if(e.error==='network'){ recWant=false; $('sfHeard').textContent='Per la voce serve internet: scrivi la risposta'; if(T&&!T.over) $('sfIn').focus(); return; }
     if(/not-allowed|service-not-allowed|audio-capture/.test(e.error)){ st.mic=false; save(); recWant=false; updToggles(); $('sfHeard').textContent='Microfono non disponibile'; if(T&&!T.over) $('sfIn').focus(); }
   };
   r.onend=()=>{
@@ -750,6 +754,8 @@ async function checkUpdate(manual){
   else { $('updBtn').onclick=()=>reloadTo(v); $('updBar').hidden=false; }
 }
 function initUpdates(){
+  // offline copy (sw.js); the page itself is still loaded fresh whenever there is a connection
+  if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{});
   $('verMsg').textContent='Versione '+APP_V;
   $('verCheck').onclick=()=>checkUpdate(true);
   if(/[?&]v=/.test(location.search)) try{ history.replaceState(null,'',location.pathname); }catch(e){}
