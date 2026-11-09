@@ -9,7 +9,7 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-09.2">
+<meta name="app-version" content="2026-11-09.3">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -291,8 +291,12 @@ const srsOf=(w,dir=st.dir)=>st.srs[dir][w.id];
 const isKnown=(w,dir=st.dir)=>{ const r=srsOf(w,dir); return !!r&&r[0]>0; };
 const isDue=(w,dir=st.dir,t=today())=>{ const r=srsOf(w,dir); return !!r&&r[0]>0&&r[1]<=t; };
 const inDays=n=>n<=0?'oggi':n===1?'domani':'tra '+n+' giorni';
+// at most NEW_PER_DAY new words per day and direction: st.nd[dir] = [day, started, extra allowed]
+const NEW_PER_DAY=20;
+function newToday(dir=st.dir){ const t=today(); if(!st.nd) st.nd={}; if(!st.nd[dir]||st.nd[dir][0]!==t) st.nd[dir]=[t,0,0]; return st.nd[dir]; }
 function grade(w,ok,dir=st.dir){
   const m=st.srs[dir], prev=m[w.id]?m[w.id].slice():null, t=today();
+  if(!prev) newToday(dir)[1]++;
   if(!ok) m[w.id]=[0,t];
   else if(!(prev&&prev[0]>0&&prev[1]>t)){   // a known word that is not due yet stays as it is
     // known at first sight → box 2 (3 days); relearned → box 1 (1 day); due review → next box
@@ -328,7 +332,8 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;
 function build(){
   const t=today(), due=[], learn=[], fresh=[], rest=[];
   for(const w of pool()){ const r=srsOf(w); (!r?fresh:r[0]===0?learn:r[1]<=t?due:rest).push(w); }
-  queue=[...shuffle(due),...shuffle(learn),...shuffle(fresh),...(st.inc?shuffle(rest):[])];
+  const nd=newToday(), room=Math.max(0,NEW_PER_DAY+nd[2]-nd[1]);
+  queue=[...shuffle(due),...shuffle(learn),...shuffle(fresh).slice(0,room),...(st.inc?shuffle(rest):[])];
   builtAt=Date.now(); stale=false; next();
 }
 function next(){ if(hold){ clearTimeout(hold.timer); hold=null; } cur=queue.shift()||null; flipped=false; render(); }
@@ -372,9 +377,13 @@ function render(){
     const ws=pool(), t=today();
     let nd=Infinity; ws.forEach(w=>{ const r=srsOf(w); if(r&&r[0]>0&&r[1]>t&&r[1]<nd) nd=r[1]; });
     const nn=nd<Infinity?ws.filter(w=>{const r=srsOf(w); return r&&r[0]>0&&r[1]===nd;}).length:0;
+    const left=ws.filter(w=>!srsOf(w)).length;
     s.innerHTML='<div class="done"><h2>Per oggi è tutto!</h2><p class="empty">'+(!ws.length?'Nessuna parola.':
-      'Hai già ripassato e imparato tutte le parole di questa scelta.'+(nn?'<br>Prossimo ripasso '+inDays(nd-t)+': '+nn+(nn===1?' parola.':' parole.'):''))+
-      '</p><button class="link" id="again">Ripassa comunque tutte</button></div>';
+      (left?'Hai fatto i ripassi e le parole nuove di oggi.':'Hai già ripassato e imparato tutte le parole di questa scelta.')+
+      (nn?'<br>Prossimo ripasso '+inDays(nd-t)+': '+nn+(nn===1?' parola.':' parole.'):''))+'</p>'+
+      (left?'<button class="link" id="more">Altre '+NEW_PER_DAY+' parole nuove</button>':'')+
+      '<button class="link" id="again">Ripassa comunque tutte</button></div>';
+    if(left) $('more').onclick=()=>{ newToday()[2]+=NEW_PER_DAY; save(); build(); };
     $('again').onclick=()=>{st.inc=true;$('incKnown').checked=true;save();build();};
     return;
   }
