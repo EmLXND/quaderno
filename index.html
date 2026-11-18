@@ -9,7 +9,7 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-09.5">
+<meta name="app-version" content="2026-11-18.1">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -61,6 +61,9 @@ select{flex:1}
 .seg button{font:inherit;font-size:.9rem;border:0;background:none;color:var(--muted);padding:10px 12px;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper);font-weight:600}
 label.check{display:flex;gap:8px;align-items:center;font-size:.9rem;color:var(--muted)}
+.opts{justify-content:space-between;row-gap:6px}
+label.runsz{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;color:var(--muted);margin-left:auto}
+#runSize{flex:none;padding:6px 8px;font-size:16px}
 button:focus-visible,select:focus-visible,input:focus-visible,.card:focus-visible{outline:2px solid var(--margin);outline-offset:2px}
 
 /* flashcard: a page of squared paper with a red margin */
@@ -202,7 +205,10 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
           <button id="dirDe" data-dir="de" aria-pressed="false">DE → IT</button>
         </div>
       </div>
-      <label class="check"><input type="checkbox" id="incKnown"> Ripassa anche le parole già sapute</label>
+      <div class="row opts">
+        <label class="check"><input type="checkbox" id="incKnown"> Anche parole già sapute</label>
+        <label class="runsz">Giro <select id="runSize" aria-label="Parole per giro"></select></label>
+      </div>
       <div id="stage"></div>
       <div class="meta"><span id="left"></span><button class="link" id="reshuffle">Mescola di nuovo</button></div>
     </section>
@@ -283,7 +289,7 @@ const W = []; // {id,it,de,c,s}
 RAW.forEach(([c,subs],ci)=>subs.forEach(([s,ws])=>ws.forEach(([it,de])=>W.push({id:it+'|'+de,it,de,c:ci,s}))));
 const CATS = RAW.map(r=>r[0]);
 const KEY='quaderno-v1';
-let st={known:{},cat:'all',dir:'it',inc:false,sound:true,mic:false};
+let st={known:{},cat:'all',dir:'it',inc:false,sound:true,mic:false,run:50};
 try{const v=JSON.parse(localStorage.getItem(KEY)||'null'); if(v) st=Object.assign(st,v);}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
 
@@ -310,15 +316,14 @@ const srsOf=(w,dir=st.dir)=>st.srs[dir][w.id];
 const isKnown=(w,dir=st.dir)=>{ const r=srsOf(w,dir); return !!r&&r[0]>0; };
 const isDue=(w,dir=st.dir,t=today())=>{ const r=srsOf(w,dir); return !!r&&r[0]>0&&r[1]<=t; };
 const inDays=n=>n<=0?'oggi':n===1?'domani':'tra '+n+' giorni';
-// at most NEW_PER_DAY new words per day and direction: st.nd[dir] = [day, started, extra allowed]
-const NEW_PER_DAY=50;
+// today's counters per direction, for the end-of-round stats: st.nd = new words started, st.rv = reviews done
 function dayStat(k,dir){ const t=today(); if(!st[k]) st[k]={}; if(!st[k][dir]||st[k][dir][0]!==t) st[k][dir]=[t,0,0]; return st[k][dir]; }
 const newToday=(dir=st.dir)=>dayStat('nd',dir);
 const revToday=(dir=st.dir)=>dayStat('rv',dir);   // reviews of due words done today
 function grade(w,ok,dir=st.dir){
   const m=st.srs[dir], prev=m[w.id]?m[w.id].slice():null, t=today();
   if(!prev) newToday(dir)[1]++;
-  else if(prev[0]>0&&prev[1]<=t) revToday(dir)[1]++;
+  else if(prev[0]>0?prev[1]<=t:prev[1]<t) revToday(dir)[1]++;   // due, or relearning since an earlier day
   if(!ok) m[w.id]=[0,t];
   else if(!(prev&&prev[0]>0&&prev[1]>t)){   // a known word that is not due yet stays as it is
     // known at first sight → box 2 (3 days); relearned → box 1 (1 day); due review → next box
@@ -347,17 +352,26 @@ function updateScore(){
 }
 
 /* ---- Impara ---- */
-let queue=[], cur=null, flipped=false, hold=null, undoInfo=null, toastTimer=0, builtAt=0, stale=false;
+let queue=[], cur=null, flipped=false, hold=null, undoInfo=null, toastTimer=0, builtAt=0, stale=false, runSize=0, runNew=new Set();
+const RUN_SIZES=[10,20,30,50,80,100];
 function pool(){ return W.filter(w=>st.cat==='all'||w.c==+st.cat); }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
-// order: reviews due today, then words being (re)learned, then new words; resting known words only on request
+// A round ("giro") has st.run cards: half reviews, half new words; if one side runs short, the other fills up.
+// Reviews in order of urgency: words being relearned, then due words (most overdue first); with the checkbox,
+// known words that aren't due yet top up the review half. The cards of a round come in mixed order.
 function build(){
-  const t=today(), due=[], learn=[], fresh=[], rest=[];
+  const t=today(), learn=[], due=[], fresh=[], rest=[];
   for(const w of pool()){ const r=srsOf(w); (!r?fresh:r[0]===0?learn:r[1]<=t?due:rest).push(w); }
-  const nd=newToday(), room=Math.max(0,NEW_PER_DAY+nd[2]-nd[1]);
-  queue=[...shuffle(due),...shuffle(learn),...shuffle(fresh).slice(0,room),...(st.inc?shuffle(rest):[])];
+  shuffle(due).sort((a,b)=>srsOf(a)[1]-srsOf(b)[1]);
+  const reviews=[...shuffle(learn),...due,...(st.inc?shuffle(rest):[])], N=st.run||50;
+  let nr=Math.min(reviews.length,Math.ceil(N/2)); const nn=Math.min(fresh.length,N-nr); nr=Math.min(reviews.length,N-nn);
+  const fr=shuffle(fresh).slice(0,nn);
+  runNew=new Set(fr); runSize=nr+nn;
+  queue=shuffle([...reviews.slice(0,nr),...fr]);
   builtAt=Date.now(); stale=false; next();
 }
+// reviews still waiting in the current category: due words plus words being relearned
+const backlog=()=>{ const t=today(); return pool().filter(w=>{ const r=srsOf(w); return r&&(r[0]===0||r[1]<=t); }).length; };
 function next(answered){ if(hold){ clearTimeout(hold.timer); hold=null; } cur=queue.shift()||null; flipped=false; render(); if(answered&&!cur) celebrate(); }
 // finishing a round by answering its last card: seal, counting stats, confetti, chime
 function celebrate(){
@@ -411,9 +425,8 @@ function confetti(r){
 const requeue=w=>queue.splice(Math.min(queue.length,4),0,w);
 function meta(){
   if(!cur){ $('left').textContent=''; return; }
-  const t=today(); let d=0,n=0,k=0;
-  for(const w of [cur,...queue]){ const r=srsOf(w); if(!r||r[0]===0) n++; else if(r[1]<=t) d++; else k++; }
-  $('left').textContent=[d&&d+' da ripassare',n&&n+' da imparare',k&&k+' già sapute'].filter(Boolean).join(' · ');
+  const rest=[cur,...queue], n=rest.filter(w=>runNew.has(w)).length, pos=Math.max(1,runSize-rest.length+1);
+  $('left').textContent='Giro '+pos+'/'+runSize+' · '+[rest.length-n&&(rest.length-n)+' ripassi',n&&n+' nuove'].filter(Boolean).join(' · ');
 }
 // "Lo so" / "Ancora": if the card is still face down, show the translation for a second first
 function act(kind){
@@ -449,14 +462,14 @@ function render(){
     const ws=pool(), t=today();
     let nd=Infinity; ws.forEach(w=>{ const r=srsOf(w); if(r&&r[0]>0&&r[1]>t&&r[1]<nd) nd=r[1]; });
     const nn=nd<Infinity?ws.filter(w=>{const r=srsOf(w); return r&&r[0]>0&&r[1]===nd;}).length:0;
-    const left=ws.filter(w=>!srsOf(w)).length;
-    s.innerHTML='<div class="done"><h2>Per oggi è tutto!</h2><p class="empty">'+(!ws.length?'Nessuna parola.':
-      (left?'Hai fatto i ripassi e le parole nuove di oggi.':'Hai già ripassato e imparato tutte le parole di questa scelta.')+
-      (nn?'<br>Prossimo ripasso '+inDays(nd-t)+': '+nn+(nn===1?' parola.':' parole.'):''))+'</p>'+
-      (left?'<button class="link" id="more">Altre '+NEW_PER_DAY+' parole nuove</button>':'')+
-      '<button class="link" id="again">Ripassa comunque tutte</button></div>';
-    if(left) $('more').onclick=()=>{ newToday()[2]+=NEW_PER_DAY; save(); build(); };
-    $('again').onclick=()=>{st.inc=true;$('incKnown').checked=true;save();build();};
+    const fresh=ws.filter(w=>!srsOf(w)).length, bl=backlog(), more=fresh+bl>0;
+    s.innerHTML='<div class="done"><h2>'+(runSize&&more?'Giro completato!':'Per oggi è tutto!')+'</h2><p class="empty">'+(!ws.length?'Nessuna parola.':
+      (bl?'Ancora '+bl+(bl===1?' parola':' parole')+' da ripassare.':'Nessun ripasso in sospeso.')+
+      (!bl&&nn?'<br>Prossimo ripasso '+inDays(nd-t)+': '+nn+(nn===1?' parola.':' parole.'):'')+
+      (!fresh?'<br>Hai imparato tutte le parole di questa scelta.':''))+'</p>'+
+      (more?'<button class="btn yes" id="again">Un altro giro</button>'
+           :'<button class="link" id="again">Ripassa comunque le parole sapute</button>')+'</div>';
+    $('again').onclick=()=>{ if(!more){ st.inc=true; $('incKnown').checked=true; save(); } build(); };
     return;
   }
   const r=srsOf(cur), t=today();
@@ -490,6 +503,8 @@ function initImpara(){
   sel.value=st.cat; sel.onchange=()=>{st.cat=sel.value;save();build();};
   document.querySelectorAll('[data-dir]').forEach(b=>b.onclick=()=>setDir(b.dataset.dir)); setDir(st.dir);
   $('incKnown').checked=st.inc; $('incKnown').onchange=e=>{st.inc=e.target.checked;save();build();};
+  const rs=$('runSize'); rs.innerHTML=RUN_SIZES.map(n=>'<option value="'+n+'">'+n+' parole</option>').join('');
+  rs.value=String(st.run||50); rs.onchange=()=>{ st.run=+rs.value; save(); build(); };
   $('reshuffle').onclick=build;
   $('toastBtn').onclick=undoKnown;
   // reviews become due by day, so a session left open for hours gets a fresh queue
