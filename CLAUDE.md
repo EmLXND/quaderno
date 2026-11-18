@@ -12,8 +12,9 @@ Single-file static app (`index.html`) served by GitHub Pages from `main` (root).
   (`it|de`) to `[box, dueDay]` (box 0 = learning, intervals in `IV`, days roll over at 4:00).
   The old `st.known` map is legacy and only read once to migrate into `st.srs.it`.
 - Impara works in rounds ("giro") of `st.run` cards (picker in the UI): half reviews (relearning
-  first, then due words most overdue first), half new words; whichever side runs short is
-  filled from the other. There is no daily new-word cap. `st.nd` / `st.rv` only count today's
+  first, then due words most overdue first) and new words; the new-word share is 50% while the
+  backlog fits in one round and slides to 10% from three rounds on; whichever side runs short
+  is filled from the other. `st.streak = [lastDay, count]` counts days with a finished round. There is no daily new-word cap. `st.nd` / `st.rv` only count today's
   new words and reviews for the end-of-round stats.
 - Offline: `sw.js` serves the page network-first (2.5 s timeout, then the saved copy) and
   assets cache-first. Bump `CACHE` in `sw.js` only when its `ASSETS` list changes. Fonts are

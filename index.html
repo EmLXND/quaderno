@@ -9,7 +9,7 @@
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Quaderno di parole</title>
 <!-- bump on every change: the installed app compares this with the online copy to update itself -->
-<meta name="app-version" content="2026-11-18.1">
+<meta name="app-version" content="2026-11-18.2">
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Quaderno">
@@ -47,6 +47,13 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);padding-block:14px 10px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
 h1{font-family:var(--display);font-weight:600;font-size:1.45rem;margin:0;color:var(--ink);letter-spacing:-.01em}
 .score{font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+/* daily streak: faded until today's first round is done */
+.flame{display:inline-flex;align-items:center;gap:2px;margin-left:10px;vertical-align:middle;font-family:var(--ui);font-size:.95rem;font-weight:600;color:#E8590C;font-variant-numeric:tabular-nums}
+.flame svg{width:19px;height:19px;fill:currentColor}
+.flame.todo{opacity:.4}
+.flameline{display:flex;justify-content:center;align-items:center;gap:6px;margin:0 0 10px;font-weight:600;color:#E8590C}
+.flameline svg{width:22px;height:22px;fill:currentColor}
+.party .flameline{animation:rise .45s 1.15s both cubic-bezier(.2,.8,.2,1)}
 .score b{color:var(--text);font-weight:600}
 .bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:4px;width:120px;margin-left:auto}
 .bar i{display:block;height:100%;background:var(--ok);width:0}
@@ -193,7 +200,7 @@ nav button[aria-current="page"]{color:var(--ink);font-weight:600}
 <body>
 <div class="wrap">
   <header>
-    <h1>Quaderno</h1>
+    <h1>Quaderno<span class="flame" id="flame" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.6 2.2c.6 3.6 4.9 6 4.9 11a5.5 5.5 0 0 1-11 0c0-2.4 1.2-4.2 2.6-5.4-.1 2 .8 3.4 2 3.6-.4-3.4.2-6.6 1.5-9.2z"/></svg><b id="flameN"></b></span></h1>
     <div><div class="score"><b id="kn">0</b> / <span id="tot">0</span> sapute <span id="kdir"></span></div><div class="bar"><i id="kbar"></i></div></div>
   </header>
   <main>
@@ -349,6 +356,7 @@ function updateScore(){
   const n=W.filter(w=>isKnown(w)).length;
   $('kn').textContent=n; $('tot').textContent=W.length; $('kbar').style.width=(100*n/W.length)+'%';
   $('kdir').textContent=st.dir==='it'?'IT→DE':'DE→IT';
+  updateStreak();
 }
 
 /* ---- Impara ---- */
@@ -364,11 +372,22 @@ function build(){
   for(const w of pool()){ const r=srsOf(w); (!r?fresh:r[0]===0?learn:r[1]<=t?due:rest).push(w); }
   shuffle(due).sort((a,b)=>srsOf(a)[1]-srsOf(b)[1]);
   const reviews=[...shuffle(learn),...due,...(st.inc?shuffle(rest):[])], N=st.run||50;
-  let nr=Math.min(reviews.length,Math.ceil(N/2)); const nn=Math.min(fresh.length,N-nr); nr=Math.min(reviews.length,N-nn);
+  // the bigger the backlog, the fewer new words: 50% while it fits in one round, down to 10% from three rounds on
+  const bl=learn.length+due.length, share=.5-.4*Math.min(1,Math.max(0,(bl-N)/(2*N)));
+  let nr=Math.min(reviews.length,N-Math.max(1,Math.round(N*share))); const nn=Math.min(fresh.length,N-nr); nr=Math.min(reviews.length,N-nn);
   const fr=shuffle(fresh).slice(0,nn);
   runNew=new Set(fr); runSize=nr+nn;
   queue=shuffle([...reviews.slice(0,nr),...fr]);
-  builtAt=Date.now(); stale=false; next();
+  builtAt=Date.now(); stale=false; updateStreak(); next();
+}
+// streak: days in a row with at least one finished round. st.streak = [last day, count]
+const flameSvg='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.6 2.2c.6 3.6 4.9 6 4.9 11a5.5 5.5 0 0 1-11 0c0-2.4 1.2-4.2 2.6-5.4-.1 2 .8 3.4 2 3.6-.4-3.4.2-6.6 1.5-9.2z"/></svg>';
+const streakNow=()=>{ const s=st.streak; return s&&s[0]>=today()-1?s[1]:0; };
+function bumpStreak(){ const t=today(), s=st.streak||[0,0]; if(s[0]===t) return false; st.streak=[t,s[0]===t-1?s[1]+1:1]; save(); return true; }
+function updateStreak(){
+  const n=streakNow(), f=$('flame'), done=!!st.streak&&st.streak[0]===today();
+  f.hidden=!n; $('flameN').textContent=n; f.classList.toggle('todo',!done);
+  f.title=n?(done?n+(n===1?' giorno':' giorni')+' di fila':'Fai un giro oggi per continuare la serie'):'';
 }
 // reviews still waiting in the current category: due words plus words being relearned
 const backlog=()=>{ const t=today(); return pool().filter(w=>{ const r=srsOf(w); return r&&(r[0]===0||r[1]<=t); }).length; };
@@ -378,9 +397,11 @@ function celebrate(){
   const box=document.querySelector('#stage .done'); if(!box) return;
   const stats=[[newToday()[1],'parole nuove'],[revToday()[1],'ripassi'],[W.filter(w=>isKnown(w)).length,'sapute']].filter(s=>s[0]>0);
   box.classList.add('party');
+  const grew=bumpStreak(), sn=streakNow(); updateStreak();   // the first round of the day extends the streak
+  const flameLine=grew?'<div class="flameline">'+flameSvg+(sn===1?'Serie iniziata!':sn+' giorni di fila!')+'</div>':'';
   box.querySelector('h2').insertAdjacentHTML('beforebegin','<svg class="seal" viewBox="0 0 92 92" aria-hidden="true"><circle class="glow" cx="46" cy="46" r="33"/><circle cx="46" cy="46" r="37"/><path d="M29 47.5l11 11 23-25"/></svg>');
   box.querySelector('h2').insertAdjacentHTML('afterend','<svg class="squig" viewBox="0 0 150 12" aria-hidden="true"><path d="M4 7c12-6 22 5 34 0s22-6 34 0 22 5 34 0 22-6 30-1"/></svg>'+
-    (stats.length?'<div class="stats">'+stats.map(([n,l])=>'<div class="stat"><b data-n="'+n+'">0</b><span>'+l+'</span></div>').join('')+'</div>':''));
+    (stats.length?'<div class="stats">'+stats.map(([n,l])=>'<div class="stat"><b data-n="'+n+'">0</b><span>'+l+'</span></div>').join('')+'</div>':'')+flameLine);
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   box.querySelectorAll('.stat b').forEach((b,i)=>{
     const n=+b.dataset.n; if(reduce){ b.textContent=n; return; }
